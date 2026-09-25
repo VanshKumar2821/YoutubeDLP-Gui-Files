@@ -173,8 +173,9 @@ class App(tk.Tk):
         self.bar = ttk.Progressbar(frm, mode="determinate", maximum=100, style="TProgressbar")
         self.bar.pack(fill="x")
 
-        self.status = tk.Label(self, text="Ready", bg=BG, fg=SUB, font=("Segoe UI", 9))
-        self.status.pack(pady=10)
+        self.status = tk.Label(self, text="Ready", bg=BG, fg=SUB, font=("Segoe UI", 9),
+                                justify="center")
+        self.status.pack(pady=10, padx=20)
 
         # Size the window to whatever the content actually renders as, rather than a
         # guessed fixed pixel size — this is what keeps every widget on-screen no matter
@@ -182,6 +183,18 @@ class App(tk.Tk):
         self.update_idletasks()
         self.geometry(f"{self.winfo_reqwidth()}x{self.winfo_reqheight()}")
         self.eval('tk::PlaceWindow . center')
+        # Wrap status text to the window's width instead of letting it run off-screen.
+        self.status.config(wraplength=self.winfo_reqwidth() - 40)
+
+    def set_status(self, text):
+        """Update the status label, wrapping long text and growing the window
+        vertically (never shrinking) if the wrapped text needs more room than
+        the window currently has."""
+        self.status.config(text=text)
+        self.update_idletasks()
+        needed_h = self.winfo_reqheight()
+        if needed_h > self.winfo_height():
+            self.geometry(f"{self.winfo_width()}x{needed_h}")
 
     # ---- link watching ----
     def on_url_change(self, *_):
@@ -239,7 +252,7 @@ class App(tk.Tk):
             return
         self.btn.config(state="disabled", text="DOWNLOADING...")
         self.bar["value"] = 0
-        self.status.config(text="Starting...")
+        self.set_status("Starting...")
         threading.Thread(target=self.run_download, args=(url, self.formats[self.res.get()]),
                           daemon=True).start()
 
@@ -310,7 +323,7 @@ class App(tk.Tk):
         txt = f"Downloading... {pct:.0f}%"
         if size_text:
             txt += f" ({size_text})"
-        self.status.config(text=txt)
+        self.set_status(txt)
         self.update_idletasks()
 
     def finish(self, ok, last_line):
@@ -318,11 +331,11 @@ class App(tk.Tk):
         if ok:
             self.bar["value"] = 100
             if "already been downloaded" in (last_line or ""):
-                self.status.config(text="Already downloaded — file exists in " + self.out_dir)
+                self.set_status("Already downloaded — file exists in " + self.out_dir)
             else:
-                self.status.config(text="Done — saved to " + self.out_dir)
+                self.set_status("Done — saved to " + self.out_dir)
         else:
-            self.status.config(text="Failed — see download_error.log in app folder")
+            self.set_status("Failed — see download_error.log in app folder")
             try:
                 with open(os.path.join(app_dir(), "download_error.log"), "w") as f:
                     f.write(last_line or "No output")
