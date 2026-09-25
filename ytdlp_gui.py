@@ -116,8 +116,11 @@ class App(tk.Tk):
         else:
             cmd += ["-f", choice, "--merge-output-format", "mp4"]
         cmd.append(url)
+        kwargs = {}
+        if os.name == "nt":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True)
+            proc = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
             ok = proc.returncode == 0
         except FileNotFoundError:
             ok, proc = False, None
