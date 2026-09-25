@@ -275,12 +275,16 @@ class App(tk.Tk):
         if size_text:
             txt += f" ({size_text})"
         self.status.config(text=txt)
+        self.update_idletasks()
 
     def finish(self, ok, last_line):
         self.btn.config(state="normal", text="DOWNLOAD")
         if ok:
             self.bar["value"] = 100
-            self.status.config(text="Done — saved to " + self.out_dir)
+            if "already been downloaded" in (last_line or ""):
+                self.status.config(text="Already downloaded — file exists in " + self.out_dir)
+            else:
+                self.status.config(text="Done — saved to " + self.out_dir)
         else:
             self.status.config(text="Failed — see download_error.log in app folder")
             try:
