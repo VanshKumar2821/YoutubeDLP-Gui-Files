@@ -21,6 +21,13 @@ def ytdlp_path():
 def np_kwargs():
     return {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 
+def _log_probe(msg):
+    try:
+        with open(os.path.join(app_dir(), "probe_error.log"), "w", encoding="utf-8") as f:
+            f.write(msg)
+    except Exception:
+        pass
+
 STD_HEIGHTS = [144, 240, 360, 480, 540, 576, 720, 900, 1080, 1440, 2160, 4320]
 
 def nearest_std(h):
@@ -31,20 +38,24 @@ def nearest_std(h):
     return f" — {mb/1024:.2f} GB" if mb > 1024 else f" — {mb:.0f} MB"
 
 def probe(url):
-    """Return (list of (label, format_str), audio_label_or_None) or None if invalid."""
-    cmd = [ytdlp_path(), "--no-warnings", "--skip-download", "-J", url]
+    """Return list of (label, format_str) or None if invalid."""
+    cmd = [ytdlp_path(), "--no-warnings", "--skip-download", "--no-playlist", "-J", url]
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=25, **np_kwargs())
-    except Exception:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=30, **np_kwargs())
+    except Exception as e:
+        _log_probe(f"subprocess error: {e}")
         return None
     if out.returncode != 0:
+        _log_probe(f"yt-dlp exit {out.returncode}: {out.stderr[-2000:]}")
         return None
     try:
         data = json.loads(out.stdout)
-    except Exception:
+    except Exception as e:
+        _log_probe(f"json parse error: {e}\nstdout tail: {out.stdout[-500:]}")
         return None
-    formats = data.get("formats", [])
+    formats = data.get("formats") or (data.get("entries") or [{}])[0].get("formats", [])
     if not formats:
+        _log_probe("no formats found in response")
         return None
     audio_sizes = [f.get("filesize") or f.get("filesize_approx") or 0
                    for f in formats if f.get("vcodec") == "none"]
@@ -167,7 +178,11 @@ class App(tk.Tk):
         threading.Thread(target=self._probe_thread, args=(url, pid), daemon=True).start()
 
     def _probe_thread(self, url, pid):
-        items = probe(url)
+        try:
+            items = probe(url)
+        except Exception as e:
+            _log_probe(f"unexpected error: {e}")
+            items = None
         self.after(0, self._probe_done, items, pid)
 
     def _probe_done(self, items, pid):
