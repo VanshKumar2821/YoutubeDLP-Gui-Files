@@ -32,6 +32,8 @@ STD_HEIGHTS = [144, 240, 360, 480, 540, 576, 720, 900, 1080, 1440, 2160, 4320]
 
 def nearest_std(h):
     return min(STD_HEIGHTS, key=lambda s: abs(s - h))
+
+def fmt_size(n):
     if not n:
         return ""
     mb = n / 1_000_000
