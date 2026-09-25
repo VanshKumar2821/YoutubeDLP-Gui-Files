@@ -21,7 +21,10 @@ def ytdlp_path():
 def np_kwargs():
     return {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
 
-def fmt_size(n):
+STD_HEIGHTS = [144, 240, 360, 480, 540, 576, 720, 900, 1080, 1440, 2160, 4320]
+
+def nearest_std(h):
+    return min(STD_HEIGHTS, key=lambda s: abs(s - h))
     if not n:
         return ""
     mb = n / 1_000_000
@@ -56,11 +59,19 @@ def probe(url):
             size += best_audio
         if h not in heights or size > heights[h]:
             heights[h] = size
+    # Bucket real heights into the nearest standard resolution for display,
+    # keeping the best (highest real height / largest size) format per bucket.
+    buckets = {}
+    for h, size in heights.items():
+        std = nearest_std(h)
+        if std not in buckets or h > buckets[std][0]:
+            buckets[std] = (h, size)
     items = []
-    for h in sorted(heights, reverse=True):
-        tag = " (4K)" if h >= 2160 else " (2K)" if h >= 1440 else ""
-        label = f"{h}p{tag}{fmt_size(heights[h])}"
-        items.append((label, f"bv*[height<={h}]+ba/b[height<={h}]"))
+    for std in sorted(buckets, reverse=True):
+        real_h, size = buckets[std]
+        tag = " (4K)" if std >= 2160 else " (2K)" if std >= 1440 else ""
+        label = f"{std}p{tag}{fmt_size(size)}"
+        items.append((label, f"bv*[height<={real_h}]+ba/b[height<={real_h}]"))
     audio_label = f"Audio Only (MP3){fmt_size(best_audio)}" if best_audio else "Audio Only (MP3)"
     items.append((audio_label, "AUDIO"))
     return items
