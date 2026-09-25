@@ -225,8 +225,15 @@ class App(tk.Tk):
 
     def run_download(self, url, choice):
         have_ffmpeg = os.path.exists(os.path.join(app_dir(), "ffmpeg.exe"))
+        # Ask yt-dlp to emit progress as a fixed, machine-parseable line instead of
+        # its normal human-readable text (which changes wording depending on the
+        # video — live streams, fragmented HLS, unknown sizes, etc. — and is why
+        # the regex-based parsing below used to silently fail to match).
+        progress_tmpl = ("download:PROGRESS|%(progress._percent_str)s|"
+                          "%(progress._downloaded_bytes_str)s|%(progress._total_bytes_str)s")
         cmd = [ytdlp_path(), "-o", os.path.join(self.out_dir, "%(title)s.%(ext)s"),
-               "--newline", "--no-warnings"]
+               "--newline", "--no-warnings", "--no-color",
+               "--progress-template", progress_tmpl]
         if have_ffmpeg:
             cmd += ["--ffmpeg-location", app_dir()]
         if choice == "AUDIO":
@@ -252,15 +259,24 @@ class App(tk.Tk):
             if line:
                 last_line = line
                 all_lines.append(line)
-            m = re.search(r"([\d.]+)%\s+of\s+~?\s*([\d.]+)\s*(KiB|MiB|GiB|B)", line)
-            if m:
-                pct, total, unit = float(m.group(1)), float(m.group(2)), m.group(3)
-                done = pct / 100 * total
-                self.after(0, self.set_progress, pct, f"{done:.1f}/{total:.1f} {unit}")
-            else:
-                m2 = re.search(r"(\d+(?:\.\d+)?)%", line)
-                if m2:
-                    self.after(0, self.set_progress, float(m2.group(1)), "")
+            if line.startswith("PROGRESS|"):
+                parts = line.split("|")
+                if len(parts) >= 4:
+                    pct_str, downloaded, total = parts[1].strip(), parts[2].strip(), parts[3].strip()
+                    try:
+                        pct = float(pct_str.replace("%", "").strip())
+                    except ValueError:
+                        continue
+                    if total and total not in ("N/A", "Unknown", "unknown"):
+                        size_text = f"{downloaded}/{total}"
+                    else:
+                        size_text = downloaded if downloaded not in ("N/A", "Unknown", "unknown") else ""
+                    self.after(0, self.set_progress, pct, size_text)
+                continue
+            # Fallback for any plain-text line yt-dlp still prints (e.g. postprocessing)
+            m2 = re.search(r"(\d+(?:\.\d+)?)%", line)
+            if m2:
+                self.after(0, self.set_progress, float(m2.group(1)), "")
         proc.wait()
         try:
             with open(os.path.join(app_dir(), "last_download.log"), "w", encoding="utf-8") as f:
