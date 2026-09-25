@@ -1,6 +1,20 @@
 import os, sys, re, json, subprocess, threading, tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
+if os.name == "nt":
+    # Without this, Windows display scaling (125%/150%, common on laptops) bitmap-stretches
+    # this fixed-size, non-resizable window. The layout still lays out at the "unscaled" size,
+    # so the bottom-most widgets (status/progress text) end up pushed past the visible edge —
+    # this is what caused the missing progress text.
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PER_MONITOR_DPI_AWARE
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 BG, BG2, FG, ACCENT, SUB = "#121212", "#1e1e1e", "#e8e8e8", "#7c5cff", "#8a8a8a"
 PLACEHOLDER = "Enter a link above"
 CHECKING = "Checking link..."
@@ -93,7 +107,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Downloader")
-        self.geometry("560x420")
+        self.geometry("560x450")
         self.configure(bg=BG)
         self.resizable(False, False)
         self.out_dir = os.path.join(os.path.expanduser("~"), "Downloads")
