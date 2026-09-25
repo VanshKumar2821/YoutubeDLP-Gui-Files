@@ -135,9 +135,12 @@ class App(tk.Tk):
         if ok:
             self.status.config(text="Done — saved to " + self.out_dir)
         else:
-            self.status.config(text="Failed. Check the link and try again.")
-            if proc and proc.stderr:
-                print(proc.stderr)
+            self.status.config(text="Failed — see download_error.log in app folder")
+            try:
+                with open(os.path.join(app_dir(), "download_error.log"), "w") as f:
+                    f.write((proc.stderr or proc.stdout or "No output") if proc else "yt-dlp.exe not found")
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     App().mainloop()
