@@ -1,4 +1,4 @@
-import os, sys, subprocess, threading, tkinter as tk
+import os, sys, re, subprocess, threading, tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 BG, BG2, FG, ACCENT, SUB = "#121212", "#1e1e1e", "#e8e8e8", "#7c5cff", "#8a8a8a"
@@ -83,7 +83,7 @@ class App(tk.Tk):
                               font=("Segoe UI", 10, "bold"), activebackground="#6a4ce0")
         self.btn.pack(fill="x", ipady=10, pady=(4, 12))
 
-        self.bar = ttk.Progressbar(frm, mode="indeterminate", style="TProgressbar")
+        self.bar = ttk.Progressbar(frm, mode="determinate", maximum=100, style="TProgressbar")
         self.bar.pack(fill="x")
 
         self.status = tk.Label(self, text="Ready", bg=BG, fg=SUB, font=("Segoe UI", 9))
@@ -101,44 +101,66 @@ class App(tk.Tk):
             messagebox.showwarning("Missing link", "Paste a video link first.")
             return
         self.btn.config(state="disabled", text="DOWNLOADING...")
-        self.bar.start(12)
-        self.status.config(text="Working...")
+        self.bar["value"] = 0
+        self.status.config(text="Starting...")
         threading.Thread(target=self.run_download, args=(url,), daemon=True).start()
 
     def run_download(self, url):
         choice = RES.get(self.res.get(), "bv*+ba/b")
-        cmd = [ytdlp_path(), "-o", os.path.join(self.out_dir, "%(title)s.%(ext)s")]
-        ffmpeg = os.path.join(app_dir(), "ffmpeg.exe")
-        if os.path.exists(ffmpeg):
+        have_ffmpeg = os.path.exists(os.path.join(app_dir(), "ffmpeg.exe"))
+        cmd = [ytdlp_path(), "-o", os.path.join(self.out_dir, "%(title)s.%(ext)s"),
+               "--newline", "--no-warnings"]
+        if have_ffmpeg:
             cmd += ["--ffmpeg-location", app_dir()]
         if choice == "AUDIO":
             cmd += ["-x", "--audio-format", "mp3"]
         else:
             cmd += ["-f", choice, "--merge-output-format", "mp4"]
         cmd.append(url)
+
         kwargs = {}
         if os.name == "nt":
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+        if not have_ffmpeg and choice != "AUDIO" and choice != "bv*+ba/b" and "height<=" in choice:
+            self.after(0, self.status.config,
+                        {"text": "Warning: ffmpeg missing — quality may be limited"})
+
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
-            ok = proc.returncode == 0
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     text=True, bufsize=1, **kwargs)
         except FileNotFoundError:
-            ok, proc = False, None
             self.after(0, lambda: messagebox.showerror(
                 "yt-dlp.exe not found",
                 "Setup did not finish correctly. Please restart the app."))
-        self.after(0, self.finish, ok, proc)
+            self.after(0, self.finish, False, "yt-dlp.exe not found")
+            return
 
-    def finish(self, ok, proc):
-        self.bar.stop()
+        last_line = ""
+        for line in proc.stdout:
+            line = line.strip()
+            if line:
+                last_line = line
+            m = re.search(r"(\d+(?:\.\d+)?)%", line)
+            if m:
+                self.after(0, self.set_progress, float(m.group(1)))
+        proc.wait()
+        self.after(0, self.finish, proc.returncode == 0, last_line)
+
+    def set_progress(self, pct):
+        self.bar["value"] = pct
+        self.status.config(text=f"Downloading... {pct:.0f}%")
+
+    def finish(self, ok, last_line):
         self.btn.config(state="normal", text="DOWNLOAD")
         if ok:
+            self.bar["value"] = 100
             self.status.config(text="Done — saved to " + self.out_dir)
         else:
             self.status.config(text="Failed — see download_error.log in app folder")
             try:
                 with open(os.path.join(app_dir(), "download_error.log"), "w") as f:
-                    f.write((proc.stderr or proc.stdout or "No output") if proc else "yt-dlp.exe not found")
+                    f.write(last_line or "No output")
             except Exception:
                 pass
 
