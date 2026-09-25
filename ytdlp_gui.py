@@ -249,15 +249,24 @@ class App(tk.Tk):
             line = line.strip()
             if line:
                 last_line = line
-            m = re.search(r"(\d+(?:\.\d+)?)%", line)
+            m = re.search(r"([\d.]+)%\s+of\s+~?\s*([\d.]+)\s*(KiB|MiB|GiB|B)", line)
             if m:
-                self.after(0, self.set_progress, float(m.group(1)))
+                pct, total, unit = float(m.group(1)), float(m.group(2)), m.group(3)
+                done = pct / 100 * total
+                self.after(0, self.set_progress, pct, f"{done:.1f}/{total:.1f} {unit}")
+            else:
+                m2 = re.search(r"(\d+(?:\.\d+)?)%", line)
+                if m2:
+                    self.after(0, self.set_progress, float(m2.group(1)), "")
         proc.wait()
         self.after(0, self.finish, proc.returncode == 0, last_line)
 
-    def set_progress(self, pct):
+    def set_progress(self, pct, size_text=""):
         self.bar["value"] = pct
-        self.status.config(text=f"Downloading... {pct:.0f}%")
+        txt = f"Downloading... {pct:.0f}%"
+        if size_text:
+            txt += f" ({size_text})"
+        self.status.config(text=txt)
 
     def finish(self, ok, last_line):
         self.btn.config(state="normal", text="DOWNLOAD")
