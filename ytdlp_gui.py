@@ -246,10 +246,12 @@ class App(tk.Tk):
             return
 
         last_line = ""
+        all_lines = []
         for line in proc.stdout:
             line = line.strip()
             if line:
                 last_line = line
+                all_lines.append(line)
             m = re.search(r"([\d.]+)%\s+of\s+~?\s*([\d.]+)\s*(KiB|MiB|GiB|B)", line)
             if m:
                 pct, total, unit = float(m.group(1)), float(m.group(2)), m.group(3)
@@ -260,6 +262,11 @@ class App(tk.Tk):
                 if m2:
                     self.after(0, self.set_progress, float(m2.group(1)), "")
         proc.wait()
+        try:
+            with open(os.path.join(app_dir(), "last_download.log"), "w", encoding="utf-8") as f:
+                f.write("\n".join(all_lines))
+        except Exception:
+            pass
         self.after(0, self.finish, proc.returncode == 0, last_line)
 
     def set_progress(self, pct, size_text=""):
