@@ -107,7 +107,6 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Downloader")
-        self.geometry("560x450")
         self.configure(bg=BG)
         self.resizable(False, False)
         self.out_dir = os.path.join(os.path.expanduser("~"), "Downloads")
@@ -176,6 +175,13 @@ class App(tk.Tk):
 
         self.status = tk.Label(self, text="Ready", bg=BG, fg=SUB, font=("Segoe UI", 9))
         self.status.pack(pady=10)
+
+        # Size the window to whatever the content actually renders as, rather than a
+        # guessed fixed pixel size — this is what keeps every widget on-screen no matter
+        # the user's display/DPI scaling.
+        self.update_idletasks()
+        self.geometry(f"{self.winfo_reqwidth()}x{self.winfo_reqheight()}")
+        self.eval('tk::PlaceWindow . center')
 
     # ---- link watching ----
     def on_url_change(self, *_):
